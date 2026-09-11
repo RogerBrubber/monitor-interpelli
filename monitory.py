@@ -1,15 +1,11 @@
 import json
 import os
-import hashlib
-from datetime import datetime
-from urllib.parse import urljoin
-
 import requests
 from bs4 import BeautifulSoup
+from urllib.parse import urljoin
 
 
 URL = "https://servizi.istruzionipiemonte.it/interpello2026/ric_interpello_ambito_al.php"
-
 SEEN_FILE = "seen.json"
 
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
@@ -17,10 +13,7 @@ TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 
 
 HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 Chrome/140 Safari/537.36"
-    )
+    "User-Agent": "Mozilla/5.0"
 }
 
 
@@ -28,11 +21,8 @@ def load_seen():
     if not os.path.exists(SEEN_FILE):
         return set()
 
-    try:
-        with open(SEEN_FILE, "r", encoding="utf-8") as f:
-            return set(json.load(f))
-    except Exception:
-        return set()
+    with open(SEEN_FILE, "r", encoding="utf-8") as f:
+        return set(json.load(f))
 
 
 def save_seen(seen):
@@ -41,33 +31,26 @@ def save_seen(seen):
 
 
 def send_telegram(message):
-    telegram_url = (
-        f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    )
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
     response = requests.post(
-        telegram_url,
+        url,
         data={
             "chat_id": TELEGRAM_CHAT_ID,
             "text": message,
-            "disable_web_page_preview": False,
+            "disable_web_page_preview": False
         },
-        timeout=30,
+        timeout=30
     )
 
     response.raise_for_status()
-
-
-def create_id(text, href):
-    value = f"{text}|{href}"
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
 def scrape():
     response = requests.get(
         URL,
         headers=HEADERS,
-        timeout=30,
+        timeout=30
     )
 
     response.raise_for_status()
@@ -77,30 +60,65 @@ def scrape():
         "html.parser"
     )
 
-    results = []
+    interpelli = []
 
-    for link in soup.find_all("a", href=True):
+    for table in soup.find_all("table"):
 
-        text = " ".join(link.stripped_strings)
+        rows = table.find_all("tr")
 
-        if not text:
-            continue
+        # Saltiamo l'header
+        for row in rows[1:]:
 
-        href = urljoin(URL, link["href"])
+            cells = row.find_all("td")
 
-        # Per ora consideriamo tutti i link della pagina.
-        # Dopo aver verificato l'HTML reale possiamo restringere
-        # il filtro agli interpelli veri e propri.
+            if len(cells) < 12:
+                continue
 
-        item_id = create_id(text, href)
+            # ID progressivo
+            hidden = row.find("input", {
+                "type": "hidden",
+                "name": "progr"
+            })
 
-        results.append({
-            "id": item_id,
-            "text": text,
-            "url": href,
-        })
+            if not hidden:
+                # Interpello cancellato
+                continue
 
-    return results
+            progr = hidden.get("value")
+
+            values = [
+                cell.get_text(" ", strip=True)
+                for cell in cells
+            ]
+
+            scuola_codice = values[0]
+            scuola = values[1]
+            classe = values[2]
+            tipo_cattedra = values[3]
+            corso = values[4]
+            durata = values[5]
+            data_interpello = values[6]
+            stato = values[8]
+            scadenza = values[9]
+
+            # Consideriamo solo interpelli aperti
+            if stato.lower() != "aperto":
+                continue
+
+            interpelli.append({
+                "id": progr,
+                "scuola_codice": scuola_codice,
+                "scuola": scuola,
+                "classe": classe,
+                "tipo_cattedra": tipo_cattedra,
+                "corso": corso,
+                "durata": durata,
+                "data_interpello": data_interpello,
+                "scadenza": scadenza,
+                "url": URL
+            })
+
+    return interpelli
 
 
 def main():
@@ -109,48 +127,57 @@ def main():
 
     seen = load_seen()
 
-    items = scrape()
+    interpelli = scrape()
 
-    print(f"Elementi trovati: {len(items)}")
-
-    new_items = [
-        item
-        for item in items
-        if item["id"] not in seen
-    ]
+    print(f"Interpelli aperti trovati: {len(interpelli)}")
 
     # Prima esecuzione:
-    # memorizziamo quello che esiste già senza bombardarti
-    # di notifiche per tutti gli interpelli storici.
+    # salviamo tutti quelli già presenti senza notificare nulla.
     if not seen:
 
-        print("Prima esecuzione.")
-        print(f"Memorizzo {len(items)} elementi esistenti.")
+        print("Prima esecuzione: inizializzazione.")
 
-        for item in items:
-            seen.add(item["id"])
+        for interpello in interpelli:
+            seen.add(interpello["id"])
 
         save_seen(seen)
 
+        print("Inizializzazione completata.")
         return
 
-    for item in new_items:
+    nuovi = []
+
+    for interpello in interpelli:
+
+        if interpello["id"] not in seen:
+            nuovi.append(interpello)
+
+    for interpello in nuovi:
 
         message = (
             "🚨 NUOVO INTERPELLO\n\n"
-            f"{item['text']}\n\n"
-            f"🔗 {item['url']}"
+            f"🏫 {interpello['scuola']}\n"
+            f"📚 {interpello['classe']}\n"
+            f"📝 {interpello['tipo_cattedra']}\n"
+            f"🌞 {interpello['corso']}\n"
+            f"📅 Durata: {interpello['durata']}\n"
+            f"📆 Pubblicato: {interpello['data_interpello']}\n"
+            f"⏰ Scadenza: {interpello['scadenza']}\n\n"
+            f"🔗 {interpello['url']}"
         )
 
         send_telegram(message)
 
-        print(f"Notificato: {item['text']}")
+        print(
+            f"Nuovo interpello notificato: "
+            f"{interpello['id']} - {interpello['classe']}"
+        )
 
-        seen.add(item["id"])
+        seen.add(interpello["id"])
 
     save_seen(seen)
 
-    print(f"Nuovi elementi: {len(new_items)}")
+    print(f"Nuovi interpelli: {len(nuovi)}")
 
 
 if __name__ == "__main__":
