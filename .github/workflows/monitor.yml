@@ -29,6 +29,11 @@ jobs:
         run: |
           pip install -r requirements.txt
 
+      - name: Test website connectivity
+        run: |
+          nslookup servizi.istruzionipiemonte.it
+          curl -I -L --max-time 20 https://servizi.istruzionipiemonte.it/interpello2026/ric_interpello_ambito_al.php
+
       - name: Run monitor
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
