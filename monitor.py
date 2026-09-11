@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
 
-URL = "https://servizi.istruzionipiemonte.it/interpello2026/ric_interpello_ambito_al.php"
+URL = "https://servizi.istruzionepiemonte.it/interpello2026/ric_interpello_ambito_al.php"
 SEEN_FILE = "seen.json"
 
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
