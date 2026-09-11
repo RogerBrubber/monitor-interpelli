@@ -32,15 +32,15 @@ jobs:
       - name: Test DNS
         run: |
           echo "DNS GitHub:"
-          nslookup servizi.istruzionipiemonte.it || true
+          nslookup servizi.istruzionepiemonte.it || true
       
           echo ""
           echo "Google DNS:"
-          nslookup servizi.istruzionipiemonte.it 8.8.8.8 || true
+          nslookup servizi.istruzionepiemonte.it 8.8.8.8 || true
       
           echo ""
           echo "Cloudflare DNS:"
-          nslookup servizi.istruzionipiemonte.it 1.1.1.1 || true
+          nslookup servizi.istruzionepiemonte.it 1.1.1.1 || true
     
       - name: Run monitor
         env:
