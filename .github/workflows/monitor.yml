@@ -29,11 +29,19 @@ jobs:
         run: |
           pip install -r requirements.txt
 
-      - name: Test website connectivity
+      - name: Test DNS
         run: |
-          nslookup servizi.istruzionipiemonte.it
-          curl -I -L --max-time 20 https://servizi.istruzionipiemonte.it/interpello2026/ric_interpello_ambito_al.php
-
+          echo "DNS GitHub:"
+          nslookup servizi.istruzionipiemonte.it || true
+      
+          echo ""
+          echo "Google DNS:"
+          nslookup servizi.istruzionipiemonte.it 8.8.8.8 || true
+      
+          echo ""
+          echo "Cloudflare DNS:"
+          nslookup servizi.istruzionipiemonte.it 1.1.1.1 || true
+    
       - name: Run monitor
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
